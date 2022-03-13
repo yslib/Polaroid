@@ -7,9 +7,9 @@ use std::collections::HashMap;
 
 use super::{
     action::Action,
-    canvas::{Bound2, RegionSelector, Renderable},
-    event::{Event, KeyInputData, MouseData, UserEvent, WindowEventHandler},
-    graphics::Graphics,
+    canvas::{Bound2, RegionSelector, Renderable, Canvas},
+    event::{Event, KeyInputData, MouseData, UserEvent},
+    graphics::{Graphics, self}
 };
 
 // use log::{debug, info};
@@ -22,7 +22,7 @@ pub enum Target {
     Window(AppWindow),
 }
 
-pub type WindowHashMap = HashMap<WindowId, Box<dyn WindowEventHandler>>;
+pub type WindowHashMap = HashMap<WindowId, Box<dyn EventListener + 'static>>;
 pub type WindowIDDHashMap = HashMap<AppWindow, WindowId>;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -30,37 +30,64 @@ pub type WindowIDDHashMap = HashMap<AppWindow, WindowId>;
 pub enum AppWindow {
     AllWindow,
     RegionSelectorCanvasWindow,
+    GifSelectorCanvasWindow,
     ConfigWindow,
 }
 
-pub struct CanvasWindow {
+pub trait EventListener {
+    fn on_mouse_press_event(&mut self, data: &MouseData);
+
+    fn on_mouse_release_event(&mut self, data: &MouseData);
+
+    fn on_mouse_move_event(&mut self, data: &MouseData);
+
+    fn on_keyboard_event(&mut self, data: &KeyInputData);
+
+    fn handle_redraw_event(&mut self);
+
+    fn on_redraw_event(&mut self, graphics: &dyn Graphics);
+
+    fn on_user_event(&mut self, data: &UserEvent);
+
+    fn on_focus_event(&mut self, focus: bool);
+
+    fn set_visible(&mut self, visible:bool);
+}
+
+pub trait WinInst: EventListener{
+    fn set_win_visible(&mut self, visible:bool);
+
+    fn window_id(&self)->WindowId;
+}
+
+
+
+pub struct WindowInstance {
     pub windowed_context: Option<ContextWrapper<PossiblyCurrent, Window>>,
     pub graphics: Box<dyn Graphics>,
     pub event_proxy: EventLoopProxy<UserEvent>,
     pub region_selector: RegionSelector,
     pub invoke_type: Action,
-    window_id: Target,
 }
 
-impl CanvasWindow {
+impl WindowInstance {
     pub fn new(
         windowed_context: WindowedContext<PossiblyCurrent>,
         graphics: Box<dyn Graphics>,
         event_proxy: EventLoopProxy<UserEvent>,
-        window_id: Target,
     ) -> Self {
-        CanvasWindow {
+        WindowInstance {
             windowed_context: Some(windowed_context),
             graphics,
             event_proxy,
-            window_id,
             invoke_type: Action::ImageCapture,
             region_selector: RegionSelector::new(),
         }
     }
+
 }
 
-impl CanvasWindow {
+impl WindowInstance {
     pub fn swap_buffers(&self) {
         self.windowed_context
             .as_ref()
@@ -82,6 +109,11 @@ impl CanvasWindow {
         }
     }
 
+    pub fn send_user_event(&self,sender:Target, receiver: Target, event: Event) {
+        let user_event = UserEvent::new(sender, receiver, event);
+        self.event_proxy.send_event(user_event).unwrap();
+    }
+
     pub fn request_redraw(&self) {
         self.windowed_context
             .as_ref()
@@ -94,72 +126,8 @@ impl CanvasWindow {
     pub fn get_selector_region(&self) -> Bound2 {
         self.region_selector.bound
     }
-}
 
-impl WindowEventHandler for CanvasWindow {
-    fn on_mouse_press_event(&mut self, data: &MouseData) {
-        self.region_selector.set_visible(true);
-        self.region_selector.set_first(data.position.into());
-    }
-
-    #[allow(unused)]
-    fn on_mouse_release_event(&mut self, data: &MouseData) {
-        let bound = self.region_selector.bound;
-        if bound.empty() == false {
-            let action = match self.invoke_type {
-                Action::ImageCapture => Action::DoImageCapture(bound),
-                Action::GifCapture => Action::DoGifCapture(bound),
-                _ => {
-                    panic!("unexpected action");
-                }
-            };
-            self.send_user_event(Target::Action, Event::DoAction(action));
-            self.request_redraw();
-        }
-    }
-
-    fn send_user_event(&self, receiver: Target, event: Event) {
-        let user_event = UserEvent::new(self.window_id, receiver, event);
-        self.event_proxy.send_event(user_event).unwrap();
-    }
-
-    fn on_mouse_move_event(&mut self, data: &MouseData) {
-        self.region_selector.set_second(data.position.into());
-        self.request_redraw();
-    }
-
-    #[allow(unused)]
-    fn on_keyboard_event(&mut self, data: &KeyInputData) {
-        // unimplemented!();
-    }
-
-    fn on_focus_event(&mut self, focus: bool) {
-        if focus {
-            //
-        } else {
-            self.region_selector.set_visible(false);
-        }
-    }
-
-    fn handle_redraw_event(&mut self) {
-        self.graphics.clear((0.0, 0.0, 0.0, 0.5));
-        self.region_selector.update(&*self.graphics); // ???
-        self.swap_buffers();
-    }
-
-    ///
-    /// This can receive user event whenever the window is visible or unvisible
-    fn on_user_event(&mut self, data: &UserEvent) {
-        match data.event {
-            crate::app::event::Event::InvokeRegionSelector(action) => {
-                self.set_visible(true);
-                self.invoke_type = action;
-            }
-            _ => {}
-        }
-    }
-
-    fn set_visible(&mut self, visible: bool) {
+    pub fn set_visible(&mut self, visible: bool) {
         self.windowed_context.as_ref().map(|f| {
             //info!("set main window visible: {}", visible);
             f.window().set_visible(visible);

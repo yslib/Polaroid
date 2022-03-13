@@ -10,12 +10,12 @@ use image::codecs::gif::GifEncoder as Encoder;
 use image::RgbaImage;
 use tokio::time::Interval;
 
-use super::window::Target;
+use super::window::{Target, WindowInstance};
 use super::{
     canvas::Bound2,
     capture::CaptureDevice,
-    event::{Event, UserEvent, WindowEventHandler},
-    window::{WindowHashMap, WindowIDDHashMap},
+    event::{Event, UserEvent},
+    window::{WindowHashMap, WindowIDDHashMap, EventListener},
 };
 use chrono::Duration;
 use glutin::{event::ModifiersState, event_loop::EventLoopProxy};
@@ -80,10 +80,10 @@ pub struct AppContext<'a> {
 }
 
 impl<'a> AppContext<'a> {
-    pub fn find_window(&mut self, app_window: AppWindow) -> Option<&mut dyn WindowEventHandler> {
+    pub fn find_window(&mut self, app_window: AppWindow) -> Option<&mut dyn EventListener> {
         if let Some(win) = self.window_id_hash.get(&app_window) {
-            if let Some(main_window) = self.window_hash.get_mut(win) {
-                return Some(main_window.deref_mut());
+            if let Some(mut main_window) = self.window_hash.get_mut(win) {
+                return Some(&mut **main_window);
             }
         }
         None
@@ -130,7 +130,7 @@ impl<'a> ActionContext for AppContext<'a> {
         let event = Event::InvokeRegionSelector(Action::GifCapture);
         let user_event = UserEvent::new(
             Target::Action,
-            Target::Window(AppWindow::RegionSelectorCanvasWindow),
+            Target::Window(AppWindow::GifSelectorCanvasWindow),
             event,
         );
         self.event_proxy.send_event(user_event);
@@ -142,6 +142,11 @@ impl<'a> ActionContext for AppContext<'a> {
         // debug!("suspend");
         let target_win = self
             .find_window(AppWindow::RegionSelectorCanvasWindow)
+            .unwrap();
+        target_win.set_visible(false);
+
+        let target_win = self
+            .find_window(AppWindow::GifSelectorCanvasWindow)
             .unwrap();
         target_win.set_visible(false);
         self.capture_device.stop_capture();

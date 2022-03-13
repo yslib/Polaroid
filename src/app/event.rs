@@ -50,22 +50,3 @@ impl UserEvent {
     }
 }
 
-pub trait WindowEventHandler {
-    fn on_mouse_press_event(&mut self, data: &MouseData);
-
-    fn on_mouse_release_event(&mut self, data: &MouseData);
-
-    fn on_mouse_move_event(&mut self, data: &MouseData);
-
-    fn on_keyboard_event(&mut self, data: &KeyInputData);
-
-    fn handle_redraw_event(&mut self);
-
-    fn on_user_event(&mut self, data: &UserEvent);
-
-    fn set_visible(&mut self, visible: bool);
-
-    fn send_user_event(&self, receiver: Target, event: Event);
-
-    fn on_focus_event(&mut self, focus: bool);
-}

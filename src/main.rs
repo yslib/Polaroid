@@ -12,7 +12,7 @@ use glutin::event_loop::EventLoop;
 fn main() {
     let event_loop = EventLoop::<UserEvent>::with_user_event();
     ApplicationBuilder::new()
-        .with_name("EasyCapture")
+        .with_name("Polaroid")
         .build(&event_loop)
         .expect("failed to create application")
         .run(event_loop);

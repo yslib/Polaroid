@@ -6,7 +6,7 @@ repository = "https://github.com/yslib/Polaroid"
 license = "Apache-2.0"
 readme = "README.md"
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 publish = false
 
 [dependencies]
